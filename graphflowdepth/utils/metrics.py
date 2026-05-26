@@ -1,0 +1,72 @@
+import math
+from typing import Dict
+
+import torch
+import torch.nn.functional as F
+
+
+def depth_metrics(pred: torch.Tensor, target: torch.Tensor, valid_mask: torch.Tensor) -> Dict[str, float]:
+    if pred.ndim == 3:
+        pred = pred[:, None]
+    if target.ndim == 3:
+        target = target[:, None]
+    if valid_mask.ndim == 3:
+        valid_mask = valid_mask[:, None]
+    valid = valid_mask.bool() & torch.isfinite(target) & (target > 0)
+    if not valid.any():
+        return {"absrel": math.nan, "rmse": math.nan, "delta1": math.nan}
+    p = pred[valid].clamp_min(1e-6)
+    t = target[valid].clamp_min(1e-6)
+    ratio = torch.maximum(p / t, t / p)
+    return {
+        "absrel": ((p - t).abs() / t).mean().item(),
+        "rmse": torch.sqrt(((p - t) ** 2).mean()).item(),
+        "delta1": (ratio < 1.25).float().mean().item(),
+    }
+
+
+def patch_edge_gradient_error(
+    pred_depth: torch.Tensor,
+    target_depth: torch.Tensor,
+    valid_mask: torch.Tensor,
+    patch_size: tuple[int, int],
+) -> float:
+    if pred_depth.ndim == 3:
+        pred_depth = pred_depth[:, None]
+    if target_depth.ndim == 3:
+        target_depth = target_depth[:, None]
+    if valid_mask.ndim == 3:
+        valid_mask = valid_mask[:, None]
+    valid_float = valid_mask.float()
+    pred_patch = F.adaptive_avg_pool2d(pred_depth, patch_size)
+    valid_patch = F.adaptive_avg_pool2d(valid_float, patch_size) > 0.5
+    target_sum = F.adaptive_avg_pool2d(target_depth * valid_float, patch_size)
+    valid_avg = F.adaptive_avg_pool2d(valid_float, patch_size)
+    target_patch = target_sum / valid_avg.clamp_min(1e-6)
+    errors = []
+    for dy, dx, scale in [(0, 1, 1.0), (1, 0, 1.0), (1, 1, math.sqrt(2.0)), (1, -1, math.sqrt(2.0))]:
+        ps, pt = _edges(pred_patch, dy, dx)
+        ts, tt = _edges(target_patch, dy, dx)
+        ms, mt = _edges(valid_patch.float(), dy, dx)
+        valid = (ms > 0.5) & (mt > 0.5)
+        if valid.any():
+            pred_grad = (pt - ps) / scale
+            target_grad = (tt - ts) / scale
+            errors.append((pred_grad - target_grad).abs()[valid].mean())
+    if not errors:
+        return math.nan
+    return torch.stack(errors).mean().item()
+
+
+def _axis_slices(length: int, delta: int):
+    if delta == 1:
+        return slice(0, length - 1), slice(1, length)
+    if delta == -1:
+        return slice(1, length), slice(0, length - 1)
+    return slice(0, length), slice(0, length)
+
+
+def _edges(x: torch.Tensor, dy: int, dx: int):
+    ys, yt = _axis_slices(x.shape[-2], dy)
+    xs, xt = _axis_slices(x.shape[-1], dx)
+    return x[:, :, ys, xs], x[:, :, yt, xt]
