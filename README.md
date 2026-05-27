@@ -42,13 +42,26 @@ Optional SILog and boundary-head scaffolding are present, but the boundary head 
 
 ## Data Format
 
-List files are plain text. Each non-comment line contains:
+List files may be plain text or CSV. Plain text rows contain:
 
 ```text
 relative/or/absolute/rgb_path relative/or/absolute/depth_path
 ```
 
-Depth can be an image or `.npy` file. Image depths with values above 255 are interpreted as millimeters and divided by 1000.
+CSV rows contain:
+
+```text
+relative/or/absolute/rgb_path,relative/or/absolute/depth_path
+```
+
+The Kaggle NYU Depth V2 dataset works directly:
+
+```bash
+--data-root /kaggle/input/nyu-depth-v2/nyu_data \
+--train-list /kaggle/input/nyu-depth-v2/nyu_data/data/nyu2_train.csv
+```
+
+For NYU's 8-bit grayscale depth targets, depth is converted to `[0, 1]` by dividing by `255`, matching the common Kaggle preprocessing. For 16-bit metric depth images, values above 255 are interpreted as millimeters and divided by `1000`. `.npy` depths are loaded as float values without automatic scaling.
 
 ## Depth Anything V2 Setup
 

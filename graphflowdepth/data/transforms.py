@@ -23,12 +23,20 @@ def load_depth(path: str, size: Optional[Tuple[int, int]] = None) -> torch.Tenso
     if path.endswith(".npy"):
         depth = np.load(path).astype("float32")
     else:
-        depth = np.asarray(Image.open(path)).astype("float32")
-        if depth.max() > 255.0:
+        depth_image = Image.open(path)
+        if depth_image.mode not in {"I;16", "I", "F"}:
+            depth_image = depth_image.convert("L")
+        depth_array = np.asarray(depth_image)
+        depth = depth_array.astype("float32")
+        if depth_array.dtype == np.uint8:
+            # NYU Depth V2 Kaggle stores depth targets as 8-bit grayscale images.
+            depth = depth / 255.0
+        elif depth.max() > 255.0:
+            # Common 16-bit metric depth convention: millimeters -> meters.
             depth = depth / 1000.0
     tensor = torch.from_numpy(depth)
     if tensor.ndim == 2:
         tensor = tensor[None]
     if size is not None and tuple(tensor.shape[-2:]) != size:
-        tensor = F.interpolate(tensor[None], size=size, mode="nearest")[0]
+        tensor = F.interpolate(tensor[None], size=size, mode="bilinear", align_corners=False)[0]
     return tensor.float()
