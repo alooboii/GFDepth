@@ -5,7 +5,7 @@ from typing import List, Optional, Tuple
 import torch
 from torch.utils.data import Dataset
 
-from .transforms import load_depth, load_rgb
+from .transforms import load_depth_with_valid_mask, load_rgb
 
 
 class RGBDepthDataset(Dataset):
@@ -19,6 +19,10 @@ class RGBDepthDataset(Dataset):
 
     The Kaggle NYU Depth V2 dataset uses CSV rows with paths relative to
     `/kaggle/input/nyu-depth-v2/nyu_data`; pass that as `data_root`.
+
+    `target_mode="display_inverse"` is the default MVP target convention:
+    normalized inverse depth in [0, 1], with closer/brighter and
+    farther/darker.
     """
 
     def __init__(
@@ -26,9 +30,11 @@ class RGBDepthDataset(Dataset):
         data_root: str,
         list_path: str,
         image_size: Optional[Tuple[int, int]] = None,
+        target_mode: str = "display_inverse",
     ) -> None:
         self.data_root = data_root
         self.image_size = image_size
+        self.target_mode = target_mode
         self.list_path = self._resolve_list_path(list_path)
         self.samples = self._read_samples(self.list_path)
         if not self.samples:
@@ -40,11 +46,7 @@ class RGBDepthDataset(Dataset):
     def __getitem__(self, index: int):
         rgb_path, depth_path = self.samples[index]
         image = load_rgb(rgb_path, self.image_size)
-        depth = load_depth(depth_path, self.image_size)
-        if depth.numel() > 0 and depth.min() >= 0 and depth.max() <= 1:
-            valid_mask = torch.isfinite(depth)
-        else:
-            valid_mask = torch.isfinite(depth) & (depth > 0)
+        depth, valid_mask = load_depth_with_valid_mask(depth_path, self.image_size, target_mode=self.target_mode)
         return {
             "image": image,
             "depth": depth,

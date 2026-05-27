@@ -61,7 +61,12 @@ The Kaggle NYU Depth V2 dataset works directly:
 --train-list /kaggle/input/nyu-depth-v2/nyu_data/data/nyu2_train.csv
 ```
 
-For NYU's 8-bit grayscale depth targets, depth is converted to DA2-style inverse display depth with `1 - gray / 255`, so closer regions are brighter and farther regions are darker. For 16-bit metric depth images, values above 255 are interpreted as millimeters and divided by `1000`. `.npy` depths are loaded as float values without automatic scaling.
+The default target mode is `display_inverse`, which converts every target to normalized DA2-style inverse depth in `[0, 1]`: closer is brighter and farther is darker. For NYU's 8-bit grayscale targets this is `1 - gray / 255`. For 16-bit/metric targets, the loader normalizes valid metric depth by image percentiles and then inverts it. This keeps training, validation, notebook plots, and saved visualizations on one convention.
+
+Other modes are available for debugging:
+
+- `--target-mode auto`: preserves the older loader behavior.
+- `--target-mode metric`: uses metric-style loading where possible.
 
 ## Depth Anything V2 Setup
 
@@ -89,7 +94,8 @@ python train.py \
   --checkpoint-dir checkpoints \
   --batch-size 4 \
   --image-height 518 \
-  --image-width 518
+  --image-width 518 \
+  --target-mode display_inverse
 ```
 
 The script prints total, frozen, trainable, and trainable-percent parameter counts at startup. Checkpoints save trainable adapter weights by default.
@@ -135,7 +141,7 @@ python eval.py \
   --visual-dir visuals
 ```
 
-Evaluation reports AbsRel, RMSE, delta1, and patch edge-gradient MAE. Visualizations include RGB, GT depth, baseline frozen DA2 depth, GraphFlow-adapted depth, absolute error, and velocity magnitude maps.
+For the default `--target-mode display_inverse`, evaluation reports display-depth MAE/RMSE, epsilon-masked AbsRel/delta1 diagnostics, and patch edge-gradient MAE. Standard AbsRel is not a good headline metric for normalized inverse depth because valid far pixels can be close to zero. In `auto` or `metric` target modes, evaluation falls back to the standard AbsRel/RMSE/delta1 metrics. Visualizations include RGB, GT depth, baseline frozen DA2 depth, GraphFlow-adapted depth, absolute error, and velocity magnitude maps.
 
 ## Repository Layout
 

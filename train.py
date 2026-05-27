@@ -48,6 +48,7 @@ def parse_args():
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--image-height", type=int, default=518)
     parser.add_argument("--image-width", type=int, default=518)
+    parser.add_argument("--target-mode", choices=["display_inverse", "auto", "metric"], default="display_inverse")
     parser.add_argument("--amp", dest="amp", action="store_true")
     parser.add_argument("--no-amp", dest="amp", action="store_false")
     parser.set_defaults(amp=DEFAULT_AMP)
@@ -75,10 +76,10 @@ def main():
     image_size = (args.image_height, args.image_width)
     os.makedirs(args.checkpoint_dir, exist_ok=True)
 
-    train_set = RGBDepthDataset(args.data_root, args.train_list, image_size=image_size)
+    train_set = RGBDepthDataset(args.data_root, args.train_list, image_size=image_size, target_mode=args.target_mode)
     val_loader = None
     if args.val_list:
-        val_set = RGBDepthDataset(args.data_root, args.val_list, image_size=image_size)
+        val_set = RGBDepthDataset(args.data_root, args.val_list, image_size=image_size, target_mode=args.target_mode)
         val_loader = DataLoader(
             val_set,
             batch_size=args.batch_size,

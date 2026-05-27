@@ -9,7 +9,7 @@ from tqdm import tqdm
 from graphflowdepth.data import RGBDepthDataset
 from graphflowdepth.models import GraphFlowDepthModel
 from graphflowdepth.utils.checkpointing import load_trainable_checkpoint
-from graphflowdepth.utils.metrics import depth_metrics, patch_edge_gradient_error
+from graphflowdepth.utils.metrics import depth_metrics, display_depth_metrics, patch_edge_gradient_error
 from graphflowdepth.utils.visualization import save_depth_visualization
 
 
@@ -23,6 +23,7 @@ def parse_args():
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--image-height", type=int, default=518)
     parser.add_argument("--image-width", type=int, default=518)
+    parser.add_argument("--target-mode", choices=["display_inverse", "auto", "metric"], default="display_inverse")
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--save-visuals", action="store_true")
     parser.add_argument("--visual-dir", default="visuals")
@@ -32,7 +33,12 @@ def parse_args():
 def main():
     args = parse_args()
     device = torch.device(args.device)
-    dataset = RGBDepthDataset(args.data_root, args.val_list, image_size=(args.image_height, args.image_width))
+    dataset = RGBDepthDataset(
+        args.data_root,
+        args.val_list,
+        image_size=(args.image_height, args.image_width),
+        target_mode=args.target_mode,
+    )
     loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False, num_workers=4)
 
     model = GraphFlowDepthModel(backbone=args.backbone, graph_dim=args.graph_dim).to(device)
@@ -49,7 +55,10 @@ def main():
             depth = batch["depth"].to(device)
             valid = batch["valid_mask"].to(device)
             pred, aux = model(image, depth_gt=depth, valid_mask=valid, return_baseline=args.save_visuals)
-            metrics = depth_metrics(pred, depth, valid)
+            if args.target_mode == "display_inverse":
+                metrics = display_depth_metrics(pred, depth, valid)
+            else:
+                metrics = depth_metrics(pred, depth, valid)
             patch_hw = next(iter(aux["velocities"].values())).shape[-2:]
             metrics["patch_edge_grad_mae"] = patch_edge_gradient_error(pred, depth, valid, patch_hw)
             for key, value in metrics.items():
