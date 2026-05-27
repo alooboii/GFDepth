@@ -61,7 +61,7 @@ The Kaggle NYU Depth V2 dataset works directly:
 --train-list /kaggle/input/nyu-depth-v2/nyu_data/data/nyu2_train.csv
 ```
 
-For NYU's 8-bit grayscale depth targets, depth is converted to `[0, 1]` by dividing by `255`, matching the common Kaggle preprocessing. For 16-bit metric depth images, values above 255 are interpreted as millimeters and divided by `1000`. `.npy` depths are loaded as float values without automatic scaling.
+For NYU's 8-bit grayscale depth targets, depth is converted to DA2-style inverse display depth with `1 - gray / 255`, so closer regions are brighter and farther regions are darker. For 16-bit metric depth images, values above 255 are interpreted as millimeters and divided by `1000`. `.npy` depths are loaded as float values without automatic scaling.
 
 ## Depth Anything V2 Setup
 
@@ -93,6 +93,35 @@ python train.py \
 ```
 
 The script prints total, frozen, trainable, and trainable-percent parameter counts at startup. Checkpoints save trainable adapter weights by default.
+
+For large datasets, use step-based checkpointing and resume:
+
+```bash
+python train.py \
+  --data-root /path/to/data \
+  --train-list train.csv \
+  --val-list val.csv \
+  --checkpoint-dir checkpoints \
+  --batch-size 2 \
+  --epochs 3 \
+  --save-every-steps 500 \
+  --val-every-steps 1000 \
+  --val-batches 50
+```
+
+This overwrites `checkpoints/latest.pt` every `--save-every-steps` and overwrites `checkpoints/best.pt` whenever the validation slice improves. To stop after a manageable slice and inspect results:
+
+```bash
+python train.py ... --max-steps-per-epoch 3000
+```
+
+Resume full training state, including optimizer, AMP scaler, epoch, step, and best score:
+
+```bash
+python train.py ... --resume checkpoints/latest.pt
+```
+
+If training is interrupted with Ctrl-C, `checkpoints/interrupt.pt` is saved before exit and can also be passed to `--resume`.
 
 ## Evaluate
 

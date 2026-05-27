@@ -29,8 +29,10 @@ def load_depth(path: str, size: Optional[Tuple[int, int]] = None) -> torch.Tenso
         depth_array = np.asarray(depth_image)
         depth = depth_array.astype("float32")
         if depth_array.dtype == np.uint8:
-            # NYU Depth V2 Kaggle stores depth targets as 8-bit grayscale images.
-            depth = depth / 255.0
+            # NYU Depth V2 Kaggle stores targets as 8-bit grayscale where
+            # brighter means farther. DA2-style visual depth is inverse:
+            # closer is brighter, farther is darker.
+            depth = 1.0 - depth / 255.0
         elif depth.max() > 255.0:
             # Common 16-bit metric depth convention: millimeters -> meters.
             depth = depth / 1000.0

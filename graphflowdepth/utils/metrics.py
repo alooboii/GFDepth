@@ -5,6 +5,13 @@ import torch
 import torch.nn.functional as F
 
 
+def _valid_depth_mask(target: torch.Tensor, valid_mask: torch.Tensor) -> torch.Tensor:
+    valid = valid_mask.bool() & torch.isfinite(target)
+    if target.numel() > 0 and target.detach().min() >= 0 and target.detach().max() <= 1:
+        return valid
+    return valid & (target > 0)
+
+
 def depth_metrics(pred: torch.Tensor, target: torch.Tensor, valid_mask: torch.Tensor) -> Dict[str, float]:
     if pred.ndim == 3:
         pred = pred[:, None]
@@ -12,7 +19,7 @@ def depth_metrics(pred: torch.Tensor, target: torch.Tensor, valid_mask: torch.Te
         target = target[:, None]
     if valid_mask.ndim == 3:
         valid_mask = valid_mask[:, None]
-    valid = valid_mask.bool() & torch.isfinite(target) & (target > 0)
+    valid = _valid_depth_mask(target, valid_mask)
     if not valid.any():
         return {"absrel": math.nan, "rmse": math.nan, "delta1": math.nan}
     p = pred[valid].clamp_min(1e-6)

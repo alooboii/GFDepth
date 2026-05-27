@@ -41,7 +41,10 @@ class RGBDepthDataset(Dataset):
         rgb_path, depth_path = self.samples[index]
         image = load_rgb(rgb_path, self.image_size)
         depth = load_depth(depth_path, self.image_size)
-        valid_mask = torch.isfinite(depth) & (depth > 0)
+        if depth.numel() > 0 and depth.min() >= 0 and depth.max() <= 1:
+            valid_mask = torch.isfinite(depth)
+        else:
+            valid_mask = torch.isfinite(depth) & (depth > 0)
         return {
             "image": image,
             "depth": depth,
