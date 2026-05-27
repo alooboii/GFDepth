@@ -119,7 +119,7 @@ class FrozenDepthAnythingV2Wrapper(nn.Module):
             depth = F.interpolate(depth, size=output_size, mode="bilinear", align_corners=True)
         return depth
 
-    @torch.no_grad()
+    @torch.inference_mode()
     def forward_baseline(self, x: torch.Tensor) -> torch.Tensor:
         maps, raw, patch_h, patch_w = self.extract_intermediate_features(x)
         del maps
