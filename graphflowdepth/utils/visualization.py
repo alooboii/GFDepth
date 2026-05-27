@@ -16,12 +16,17 @@ def save_depth_visualization(
 ) -> None:
     os.makedirs(output_dir, exist_ok=True)
     image_np = _denormalize_image(image.detach().cpu())
-    gt = gt_depth.squeeze().detach().cpu()
-    pred = graphflow_depth.squeeze().detach().cpu()
-    panels = [("rgb", image_np), ("gt", gt), ("graphflow", pred), ("abs_error", (pred - gt).abs())]
+    gt = gt_depth.squeeze().detach().cpu().float()
+    pred = graphflow_depth.squeeze().detach().cpu().float()
+    panels = [
+        ("rgb", image_np),
+        ("gt", _normalize_depth_for_display(gt)),
+        ("graphflow", _normalize_depth_for_display(pred)),
+        ("abs_error", _normalize_depth_for_display((pred - gt).abs())),
+    ]
     if baseline_depth is not None:
-        base = baseline_depth.squeeze().detach().cpu()
-        panels.insert(2, ("baseline", base))
+        base = baseline_depth.squeeze().detach().cpu().float()
+        panels.insert(2, ("baseline", _normalize_depth_for_display(base)))
     if velocity_maps:
         for name, value in velocity_maps.items():
             panels.append((f"vel_{name}", value.detach().pow(2).sum(dim=0).sqrt().cpu()))
@@ -44,3 +49,8 @@ def _denormalize_image(image: torch.Tensor):
     std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
     image = (image * std + mean).clamp(0, 1)
     return image.permute(1, 2, 0).numpy()
+
+
+def _normalize_depth_for_display(depth: torch.Tensor) -> torch.Tensor:
+    depth = depth.float()
+    return (depth - depth.min()) / (depth.max() - depth.min()).clamp_min(1e-6)
