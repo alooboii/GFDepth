@@ -20,9 +20,10 @@ Only these parts train:
 - GraphFlow adapter
 - down projection, velocity aggregation projection, up projection
 - scalar residual gate `gamma`
+- optional two-scalar output calibration (`scale`, `shift`)
 - auxiliary edge-depth head
 
-DA2 encoder and DA2 DPT/depth head remain frozen. `gamma` is initialized to `0.0`, so the initial adapted model is exactly the frozen DA2 baseline.
+DA2 encoder and DA2 DPT/depth head remain frozen. `gamma` is initialized to `0.0`; output calibration is initialized to identity (`scale=1`, `shift=0`), so the initial adapted model is exactly the frozen DA2 baseline.
 
 ## No Config System
 
@@ -95,7 +96,8 @@ python train.py \
   --batch-size 4 \
   --image-height 518 \
   --image-width 518 \
-  --target-mode display_inverse
+  --target-mode display_inverse \
+  --output-calibration
 ```
 
 The script prints total, frozen, trainable, and trainable-percent parameter counts at startup. Checkpoints save trainable adapter weights by default.

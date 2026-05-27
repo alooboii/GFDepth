@@ -24,6 +24,9 @@ def parse_args():
     parser.add_argument("--image-height", type=int, default=518)
     parser.add_argument("--image-width", type=int, default=518)
     parser.add_argument("--target-mode", choices=["display_inverse", "auto", "metric"], default="display_inverse")
+    parser.add_argument("--output-calibration", dest="output_calibration", action="store_true")
+    parser.add_argument("--no-output-calibration", dest="output_calibration", action="store_false")
+    parser.set_defaults(output_calibration=True)
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--save-visuals", action="store_true")
     parser.add_argument("--visual-dir", default="visuals")
@@ -41,7 +44,11 @@ def main():
     )
     loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False, num_workers=4)
 
-    model = GraphFlowDepthModel(backbone=args.backbone, graph_dim=args.graph_dim).to(device)
+    model = GraphFlowDepthModel(
+        backbone=args.backbone,
+        graph_dim=args.graph_dim,
+        output_calibration=args.output_calibration,
+    ).to(device)
     load_info = load_trainable_checkpoint(model, args.checkpoint, map_location=device)
     if load_info["unexpected"]:
         print(f"unexpected checkpoint keys: {load_info['unexpected']}")

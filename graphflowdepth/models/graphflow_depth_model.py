@@ -21,6 +21,7 @@ class GraphFlowDepthModel(nn.Module):
         alpha_embed_dim: int = 16,
         flow_hidden_dim: int = 128,
         gamma_init: float = 0.0,
+        output_calibration: bool = True,
     ) -> None:
         super().__init__()
         self.da2 = FrozenDepthAnythingV2Wrapper(backbone=backbone)
@@ -33,6 +34,9 @@ class GraphFlowDepthModel(nn.Module):
             flow_hidden_dim=flow_hidden_dim,
         )
         self.gamma = nn.Parameter(torch.tensor(float(gamma_init)))
+        self.output_calibration = output_calibration
+        self.output_log_scale = nn.Parameter(torch.zeros(()), requires_grad=output_calibration)
+        self.output_shift = nn.Parameter(torch.zeros(()), requires_grad=output_calibration)
         self.assert_da2_frozen()
 
     def forward(
@@ -52,8 +56,12 @@ class GraphFlowDepthModel(nn.Module):
         z4_tilde = z4 + self.gamma * residual
         replaced = self.da2.replace_feature(raw_features, -1, z4_tilde)
         pred_depth = self.da2.depth_from_raw_features(replaced, patch_h, patch_w, output_size=x.shape[-2:])
+        if self.output_calibration:
+            pred_depth = pred_depth * self.output_log_scale.exp() + self.output_shift
 
         aux["gamma"] = self.gamma
+        aux["output_scale"] = self.output_log_scale.exp()
+        aux["output_shift"] = self.output_shift
         if return_baseline:
             with torch.no_grad():
                 aux["baseline_depth"] = self.da2.depth_from_raw_features(

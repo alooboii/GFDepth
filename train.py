@@ -21,6 +21,7 @@ DEFAULT_DIRECTION_EMBED_DIM = 16
 DEFAULT_ALPHA_EMBED_DIM = 16
 DEFAULT_FLOW_HIDDEN_DIM = 128
 DEFAULT_GAMMA_INIT = 0.0
+DEFAULT_OUTPUT_CALIBRATION = True
 
 DEFAULT_BATCH_SIZE = 4
 DEFAULT_LR = 1e-4
@@ -49,6 +50,9 @@ def parse_args():
     parser.add_argument("--image-height", type=int, default=518)
     parser.add_argument("--image-width", type=int, default=518)
     parser.add_argument("--target-mode", choices=["display_inverse", "auto", "metric"], default="display_inverse")
+    parser.add_argument("--output-calibration", dest="output_calibration", action="store_true")
+    parser.add_argument("--no-output-calibration", dest="output_calibration", action="store_false")
+    parser.set_defaults(output_calibration=DEFAULT_OUTPUT_CALIBRATION)
     parser.add_argument("--amp", dest="amp", action="store_true")
     parser.add_argument("--no-amp", dest="amp", action="store_false")
     parser.set_defaults(amp=DEFAULT_AMP)
@@ -96,6 +100,7 @@ def main():
         alpha_embed_dim=DEFAULT_ALPHA_EMBED_DIM,
         flow_hidden_dim=DEFAULT_FLOW_HIDDEN_DIM,
         gamma_init=DEFAULT_GAMMA_INIT,
+        output_calibration=args.output_calibration,
     ).to(device)
     model.assert_da2_frozen()
     print(format_parameter_report(model))
@@ -267,14 +272,18 @@ def train_one_epoch(
             if global_step % args.log_every == 0:
                 avg = {key: value / max(running_count, 1) for key, value in running.items()}
                 gamma = float(model.gamma.detach().cpu())
+                out_scale = float(model.output_log_scale.detach().exp().cpu())
+                out_shift = float(model.output_shift.detach().cpu())
                 pbar.set_postfix_str(
                     f"tot={avg['total_loss']:.4f} d={avg['depth_loss']:.4f} "
-                    f"fm={avg['fm_loss']:.4f} edge={avg['edge_loss']:.4f} gamma={gamma:.5f}"
+                    f"fm={avg['fm_loss']:.4f} edge={avg['edge_loss']:.4f} "
+                    f"gamma={gamma:.5f} scale={out_scale:.4f} shift={out_shift:.4f}"
                 )
                 tqdm.write(
                     f"global_step={global_step} epoch={epoch} step={step}/{len(train_loader)} "
                     f"total_loss={avg['total_loss']:.6f} depth_loss={avg['depth_loss']:.6f} "
-                    f"fm_loss={avg['fm_loss']:.6f} edge_loss={avg['edge_loss']:.6f} gamma={gamma:.6f}"
+                    f"fm_loss={avg['fm_loss']:.6f} edge_loss={avg['edge_loss']:.6f} "
+                    f"gamma={gamma:.6f} output_scale={out_scale:.6f} output_shift={out_shift:.6f}"
                 )
 
             if args.save_every_steps > 0 and global_step % args.save_every_steps == 0:
