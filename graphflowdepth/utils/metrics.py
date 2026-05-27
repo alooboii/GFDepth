@@ -32,6 +32,48 @@ def depth_metrics(pred: torch.Tensor, target: torch.Tensor, valid_mask: torch.Te
     }
 
 
+def display_depth_metrics(
+    pred: torch.Tensor,
+    target: torch.Tensor,
+    valid_mask: torch.Tensor,
+    min_target: float = 0.03,
+) -> Dict[str, float]:
+    """Metrics for normalized inverse-depth/display targets in [0, 1].
+
+    AbsRel and ratio metrics are unstable when inverse-depth targets approach
+    zero, so those two are reported on an epsilon-masked subset. MAE/RMSE use
+    all finite display-valid pixels and are the primary metrics for this mode.
+    """
+    if pred.ndim == 3:
+        pred = pred[:, None]
+    if target.ndim == 3:
+        target = target[:, None]
+    if valid_mask.ndim == 3:
+        valid_mask = valid_mask[:, None]
+
+    valid = valid_mask.bool() & torch.isfinite(pred) & torch.isfinite(target)
+    if not valid.any():
+        return {"mae": math.nan, "rmse": math.nan, "absrel_eps": math.nan, "delta1_eps": math.nan}
+
+    p = pred[valid].float()
+    t = target[valid].float()
+    mae = (p - t).abs().mean().item()
+    rmse = torch.sqrt(((p - t) ** 2).mean()).item()
+
+    ratio_valid = valid & (target > min_target) & (pred > min_target)
+    if not ratio_valid.any():
+        absrel = math.nan
+        delta1 = math.nan
+    else:
+        p_ratio = pred[ratio_valid].float()
+        t_ratio = target[ratio_valid].float()
+        ratio = torch.maximum(p_ratio / t_ratio, t_ratio / p_ratio)
+        absrel = ((p_ratio - t_ratio).abs() / t_ratio).mean().item()
+        delta1 = (ratio < 1.25).float().mean().item()
+
+    return {"mae": mae, "rmse": rmse, "absrel_eps": absrel, "delta1_eps": delta1}
+
+
 def patch_edge_gradient_error(
     pred_depth: torch.Tensor,
     target_depth: torch.Tensor,
